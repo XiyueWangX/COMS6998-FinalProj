@@ -1,6 +1,7 @@
 import json
 from transformers import pipeline
 import torch
+import os
 
 
 def load_prompts(file_path):
@@ -24,6 +25,15 @@ def test_semcoder(prompt, generator):
         return None
 
 
+def save_individual_result(idx, prompt, result, output_dir):
+    """Save individual results to separate files."""
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"result_{idx + 1}.json")
+    with open(output_path, "w") as file:
+        json.dump({"prompt": prompt, "result": result}, file, indent=4)
+    print(f"Saved result for prompt {idx + 1} to {output_path}")
+
+
 def main():
     # Initialize the SemCoder model pipeline
     print("Initializing SemCoder...")
@@ -42,22 +52,25 @@ def main():
 
     # Test each prompt and save the results
     results = []
-    output_file = "data/test_results.jsonl"  # Path to save the results
+    output_file = "data/test_results.jsonl"  # Path to save the aggregated results
+    individual_output_dir = "data/individual_results"  # Directory to save individual result files
 
     for idx, prompt in enumerate(prompts):
         print(f"Testing prompt {idx + 1}/{len(prompts)}...")
         result = test_semcoder(prompt, generator)
         if result:
             results.append({"prompt": prompt, "result": result})
+            # Save individual result
+            save_individual_result(idx, prompt, result, individual_output_dir)
         else:
             print(f"Prompt {idx + 1} failed.")
 
-    # Save results to a JSONL file
+    # Save aggregated results to a JSONL file
     with open(output_file, "w") as file:
         for entry in results:
             file.write(json.dumps(entry) + "\n")
 
-    print(f"Testing completed. Results saved to {output_file}.")
+    print(f"Testing completed. Aggregated results saved to {output_file}.")
 
 
 if __name__ == "__main__":
