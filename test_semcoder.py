@@ -55,7 +55,7 @@ def main():
     print("SemCoder initialized successfully!")
 
     # Load the generated prompts
-    prompt_file = "data/output.jsonl"  # Path to the JSONL file with generated prompts
+    prompt_file = "data/prompts.jsonl"  # Path to the JSONL file with generated prompts
     prompts = load_prompts(prompt_file)
     print(f"Loaded {len(prompts)} prompts for testing.")
 
