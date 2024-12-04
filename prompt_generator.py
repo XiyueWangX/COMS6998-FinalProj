@@ -2,21 +2,58 @@ import json
 import re
 import base64
 
+# Define allowed encodings per template tag
+ALLOWED_ENCODINGS = {
+    "AIM": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Compress": ["compressed"],
+    "Fragments": ["fragments"],
+    "Base64_Base64": ["base64"],
+    "Base64_NL": ["base64"],
+    "NL_Base64": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "ROT13": ["rot13"],
+    "DevMode": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Wiki": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Injection_1": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Injection_2": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Injection_3": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "JSON_1": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "JSON_2": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Prefix_1": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Prefix_2": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Rule_1": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Rule_2": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Prefix_Rule_1": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+    "Prefix_Rule_2": ["origin", "compressed", "leetspeak", "unicode", "fragments", "base64", "rot13"],
+}
+
+# Encoding functions
+ENCODINGS = {
+    "origin": lambda x: x,
+    "compressed": lambda x: encode_compress_string(x),
+    "leetspeak": lambda x: leetspeak_encoding(x),
+    "unicode": lambda x: leetspeak_unicode_encoding(x),
+    "fragments": lambda x: encode_with_word_fragments(x),
+    "base64": lambda x: base64_encoding(x),
+    "rot13": lambda x: rot13_encoding(x),
+}
+
 def load_templates(file_path):
     """Load templates from a JSONL file."""
     templates = []
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         for line in file:
             if line.strip():
                 data = json.loads(line)
                 templates.append(data)
     return templates
 
+
 def save_to_output(data, file_path):
     """Write formatted prompts to a JSONL file."""
-    with open(file_path, 'w') as file:
+    with open(file_path, "w") as file:
         for entry in data:
-            file.write(json.dumps({"prompt": entry}) + '\n')
+            file.write(json.dumps({"prompt": entry}) + "\n")
+
 
 def generate_prompts(user_input, templates):
     """
@@ -29,34 +66,39 @@ def generate_prompts(user_input, templates):
     Returns:
         list: A list of all generated prompts.
     """
-    # List of encoding functions
-    encoders = [
-        lambda x: x,  # Original input (no encoding)
-        encode_compress_string,
-        leetspeak_encoding,
-        leetspeak_unicode_encoding,
-        encode_with_word_fragments,
-        base64_encoding,
-        rot13_encoding
-    ]
-
-    # Generate prompts
     generated_prompts = []
     for template in templates:
+        template_tag = template.get("tag", "")  # Get the tag of the template
         prompt_template = template.get("template", "")
-        for encoder in encoders:
+
+        # Add the original prompt as a baseline
+        try:
+            original_prompt = prompt_template.format(user_input=user_input)
+            generated_prompts.append({"tag": template_tag, "encoding": "origin", "prompt": original_prompt})
+        except KeyError as e:
+            print(f"Error formatting original prompt: {e}")
+            continue
+
+        # Get allowed encodings for this template
+        allowed_encodings = ALLOWED_ENCODINGS.get(template_tag, [])
+
+        for encoding_name, encoder in ENCODINGS.items():
+            if encoding_name not in allowed_encodings or encoding_name == "origin":
+                # Skip encodings not allowed or already handled as baseline
+                continue
+
             try:
                 # Apply encoding to the user input
                 encoded_input = encoder(user_input)
                 # Replace {user_input} in the template
                 prompt = prompt_template.format(user_input=encoded_input)
-                generated_prompts.append(prompt)
+                generated_prompts.append({"tag": template_tag, "encoding": encoding_name, "prompt": prompt})
             except KeyError as e:
                 print(f"Error formatting template: {e}")
                 print(f"Problematic template: {prompt_template}")
             except Exception as e:
                 print(f"Unexpected error: {e}")
-                print(f"Encoder: {encoder}, Input: {user_input}")
+                print(f"Encoder: {encoding_name}, Input: {user_input}")
 
     return generated_prompts
 
@@ -222,25 +264,17 @@ def rot13_encoding(input_string):
     return ''.join(shift_char(char) for char in input_string)
 
 def main():
-    # Paths for input and output files
     template_file = "data/templates.jsonl"
     output_file = "data/output.jsonl"
-
-    # Get user input
     user_input = input("Enter the malicious input to craft prompts: ")
 
-    print(base64_encoding(user_input))
-
-    # Load templates
     print("Loading templates...")
     templates = load_templates(template_file)
     print(f"Loaded {len(templates)} templates.")
 
-    # Generate adversarial prompts
     print("Generating prompts...")
     generated_prompts = generate_prompts(user_input, templates)
 
-    # Save prompts to output file
     print(f"Writing {len(generated_prompts)} prompts to {output_file}...")
     save_to_output(generated_prompts, output_file)
     print("Finished! The prompts have been saved.")
