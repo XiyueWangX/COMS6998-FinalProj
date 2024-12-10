@@ -73,7 +73,7 @@ def main():
                 "tag": prompt_data.get("tag"),
                 "encoding": prompt_data.get("encoding"),
                 "prompt": prompt_text,
-                "result": result,
+                "response": result,
             })
             # Save individual result
             save_individual_result(idx, prompt_data, result, individual_output_dir)

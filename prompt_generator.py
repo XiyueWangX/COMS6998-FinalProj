@@ -1,6 +1,7 @@
 import json
 import re
 import base64
+import argparse
 
 # Define allowed encodings per template tag
 ALLOWED_ENCODINGS = {
@@ -56,13 +57,14 @@ def save_to_output(data, file_path):
             file.write(json.dumps(entry) + "\n")
 
 
-def generate_prompts(user_input, templates):
+def generate_prompts(user_input, templates, use_encoding=True):
     """
-    Generate prompts using user input, templates, and encoded variations of the input.
+    Generate prompts using user input, templates, and optionally encoded variations of the input.
 
     Args:
         user_input (str): The original user input to encode and use in prompts.
         templates (list): A list of template dictionaries.
+        use_encoding (bool): Whether to include encoded variations.
 
     Returns:
         list: A list of all generated prompts.
@@ -80,44 +82,58 @@ def generate_prompts(user_input, templates):
         template_tag = template.get("tag", "")  # Get the tag of the template
         prompt_template = template.get("template", "")
 
-        # Get allowed encodings for this template
-        allowed_encodings = ALLOWED_ENCODINGS.get(template_tag, [])
-
-        # Add the original prompt as a baseline only if "origin" is allowed
-        if "origin" in allowed_encodings:
+        # When encoding is disabled, only replace {user_input} without considering allowed encodings
+        if not use_encoding:
             try:
-                original_prompt = prompt_template.format(user_input=user_input)
+                # Simply replace the placeholder in the template with the user input
+                prompt = prompt_template.format(user_input=user_input)
                 generated_prompts.append({
                     "tag": template_tag,
                     "encoding": "origin",
-                    "prompt": original_prompt
-                })
-            except KeyError as e:
-                print(f"Error formatting original prompt: {e}")
-                continue
-
-        # Process other allowed encodings
-        for encoding_name, encoder in ENCODINGS.items():
-            if encoding_name not in allowed_encodings or encoding_name == "origin":
-                # Skip encodings not allowed or already handled as baseline
-                continue
-
-            try:
-                # Apply encoding to the user input
-                encoded_input = encoder(user_input)
-                # Replace {user_input} in the template
-                prompt = prompt_template.format(user_input=encoded_input)
-                generated_prompts.append({
-                    "tag": template_tag,
-                    "encoding": encoding_name,
                     "prompt": prompt
                 })
             except KeyError as e:
-                print(f"Error formatting template: {e}")
-                print(f"Problematic template: {prompt_template}")
-            except Exception as e:
-                print(f"Unexpected error: {e}")
-                print(f"Encoder: {encoding_name}, Input: {user_input}")
+                print(f"Error formatting prompt: {e}")
+                continue
+        else:
+            # Get allowed encodings for this template
+            allowed_encodings = ALLOWED_ENCODINGS.get(template_tag, [])
+
+            # Add the original prompt as a baseline only if "origin" is allowed
+            if "origin" in allowed_encodings:
+                try:
+                    original_prompt = prompt_template.format(user_input=user_input)
+                    generated_prompts.append({
+                        "tag": template_tag,
+                        "encoding": "origin",
+                        "prompt": original_prompt
+                    })
+                except KeyError as e:
+                    print(f"Error formatting original prompt: {e}")
+                    continue
+
+            # Process other allowed encodings
+            for encoding_name, encoder in ENCODINGS.items():
+                if encoding_name not in allowed_encodings or encoding_name == "origin":
+                    # Skip encodings not allowed or already handled as baseline
+                    continue
+
+                try:
+                    # Apply encoding to the user input
+                    encoded_input = encoder(user_input)
+                    # Replace {user_input} in the template
+                    prompt = prompt_template.format(user_input=encoded_input)
+                    generated_prompts.append({
+                        "tag": template_tag,
+                        "encoding": encoding_name,
+                        "prompt": prompt
+                    })
+                except KeyError as e:
+                    print(f"Error formatting template: {e}")
+                    print(f"Problematic template: {prompt_template}")
+                except Exception as e:
+                    print(f"Unexpected error: {e}")
+                    print(f"Encoder: {encoding_name}, Input: {user_input}")
 
     return generated_prompts
 
@@ -283,19 +299,23 @@ def rot13_encoding(input_string):
     return ''.join(shift_char(char) for char in input_string)
 
 def main():
-    template_file = "data/templates.jsonl"
-    output_file = "data/prompts.jsonl"
+    parser = argparse.ArgumentParser(description="Generate adversarial prompts.")
+    parser.add_argument("--templates", type=str, required=True, help="Path to the template JSONL file.")
+    parser.add_argument("--output", type=str, required=True, help="Path to save the generated prompts.")
+    parser.add_argument("--use-encoding", action="store_true", help="Include encoded prompts (default: False).")
+    args = parser.parse_args()
+
     user_input = input("Enter the malicious input to craft prompts: ")
 
     print("Loading templates...")
-    templates = load_templates(template_file)
+    templates = load_templates(args.templates)
     print(f"Loaded {len(templates)} templates.")
 
     print("Generating prompts...")
-    generated_prompts = generate_prompts(user_input, templates)
+    generated_prompts = generate_prompts(user_input, templates, use_encoding=args.use_encoding)
 
-    print(f"Writing {len(generated_prompts)} prompts to {output_file}...")
-    save_to_output(generated_prompts, output_file)
+    print(f"Writing {len(generated_prompts)} prompts to {args.output}...")
+    save_to_output(generated_prompts, args.output)
     print("Finished! The prompts have been saved.")
 
 if __name__ == "__main__":
